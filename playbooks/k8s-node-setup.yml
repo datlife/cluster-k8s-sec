@@ -1,0 +1,17 @@
+---
+# This playbook is managed by Ansible
+# Tested on Ubuntu
+
+- name: Set up K8s nodes
+  hosts: all
+  any_errors_fatal: true
+  vars:
+    # Variable go here
+
+  tasks:
+  - name: Disable Swap
+
+  - name: Update network config
+
+  - name: Install `containerd`,  `kubelet`, `kubeadm`
+  

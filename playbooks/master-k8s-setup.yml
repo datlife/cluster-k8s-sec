@@ -1,0 +1,120 @@
+## Reference:
+## https://kubernetes.io/docs/setup/production-environment/
+---
+- hosts: all
+  become: true
+  tasks:
+  - name: Ensure containerd.conf has overlay and `br_netfilter`
+    ansible.builtin.lineinfile:
+      create: yes
+      path: /etc/modules-load.d/containerd.conf
+      state: present
+      line: "{{ item }}"
+    with_items:
+      - overlay
+      - br_netfilter
+
+  - name: modprobe
+    command: "{{ item }}"
+    with_items:
+      - modprobe overlay
+      - modprobe br_netfilter
+
+  - name: Ensure K8s CRI has proper network config
+    ansible.builtin.lineinfile:
+      create: yes
+      path: /etc/sysctl.d/99-kubernetes-cri.conf
+      state: present
+      line: "{{ item }}"
+    with_items:
+      - "net.bridge.bridge-nf-call-iptables  = 1"
+      - "net.ipv4.ip_forward                 = 1"
+      - "net.bridge.bridge-nf-call-ip6tables = 1"
+
+  - name: Install containerd
+    apt:
+      name: containerd
+      state: present
+      update_cache: yes
+  
+  - name: Configure containerd
+    command: "{{ item }}"
+    become: true
+    with_items:
+    - "mkdir -p /etc/containerd"
+    - "containerd config default | sudo tee /etc/containerd/config.toml"
+    - "systemctl restart containerd"
+  
+
+  ### Disable swap for kubeadm ###
+  - name: Remove swapfile from /etc/fstab
+    mount:
+      name: "{{ item }}"
+      fstype: swap
+      state: absent
+    with_items:
+      - swap
+      - none
+
+  - name: Disable swap
+    command: swapoff -a
+    when: ansible_swaptotal_mb > 0
+
+  # - name: Add an apt signing key for Kubernetes
+  #   apt_key:
+  #     url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+  #     state: present
+
+  # - name: Adding apt repository for Kubernetes
+  #   apt_repository:
+  #     repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+  #     state: present
+  #     filename: kubernetes.list
+
+  # - name: Install Kubernetes binaries
+  #   apt: 
+  #     name: "{{ packages }}"
+  #     state: present
+  #     update_cache: yes
+  #   vars:
+  #     packages:
+  #       - kubelet 
+  #       - kubeadm 
+  #       - kubectl
+
+  # - name: Configure node ip
+  #   lineinfile:
+  #     path: /etc/default/kubelet
+  #     line: KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
+  #     create: yes
+
+  # - name: Restart kubelet
+  #   service:
+  #     name: kubelet
+  #     daemon_reload: yes
+  #     state: restarted
+
+
+  # - name: Initialize the Kubernetes cluster using kubeadm
+  #   command: kubeadm init --apiserver-advertise-address="192.168.50.10" --apiserver-cert-extra-sans="192.168.50.10"  --node-name k8s-master --pod-network-cidr=192.168.0.0/16
+
+  # - name: Setup kubeconfig for vagrant user
+  #   command: "{{ item }}"
+  #   with_items:
+  #    - mkdir -p /home/vagrant/.kube
+  #    - cp -i /etc/kubernetes/admin.conf /home/vagrant/.kube/config
+  #    - chown vagrant:vagrant /home/vagrant/.kube/config
+
+
+  # - name: Install calico pod network
+  #   become: false
+  #   command: kubectl apply -f https://docs.projectcalico.org/v3.8/manifests/calico.yaml
+
+
+  # - name: Generate join command
+  #   command: kubeadm token create --print-join-command
+  #   register: join_command
+
+  # - name: Copy join command to local file
+  #   local_action: copy content="{{ join_command.stdout_lines[0] }}" dest="./join-command"
+  #   become: false
